@@ -1,6 +1,6 @@
 # Runik API
 
-`v0.1.0`
+`v0.1.1`
 User management API built with PostgreSQL, Redis, Fiber, and GORM
 
 ## Authorization
@@ -55,6 +55,15 @@ Create a session
 | password | required, min 8, max 32  | login password                            |
 | expire   | required, boolean        | whether session will expire after 10 days |
 | ip       | default to client ip, ip | ip that created session                   |
+
+### GET /users/sessions
+
+[Session Auth](#session-auth)
+
+Get all sessions for this account
+
+Response
+`ip[]`
 
 ### DELETE /users/sessions/:token
 
