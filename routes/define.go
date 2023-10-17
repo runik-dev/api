@@ -75,8 +75,9 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Put("/verify/:token", putVerify)
 	users.Post("/", postUsers)
 	users.Get("/", getUsers)
+	users.Get("/sessions", getSessions)
 	users.Post("/sessions", postSessions)
-	users.Delete("/sessions/:token", deleteSessions)
+	users.Delete("/sessions/:token", deleteSession)
 	users.Get("/me", getMe)
 	users.Put("/me/email", putEmail)
 	users.Put("/me/password", putPassword)
@@ -254,6 +255,50 @@ func getUsers(c *fiber.Ctx) error {
 
 	return c.Status(200).JSON(users)
 }
+func getSessions(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	// find all entries with rdb where key starts with session: and the value includes parsed.UserID
+	iter := rdb.Scan(ctx, 0, "session:*", 0).Iterator()
+	var sessions []string
+	for iter.Next(ctx) {
+		key := iter.Val()
+		val, err := rdb.Get(ctx, key).Result()
+		if err != nil {
+			fmt.Println(err.Error())
+			return c.Status(500).JSON(errors.ServerRedisError)
+		}
+		var parsed structs.Session
+		err = sonic.UnmarshalString(val, &parsed)
+		if err != nil {
+			fmt.Println(err.Error())
+			return c.Status(500).JSON(errors.ServerParseError)
+		}
+		if parsed.UserID == parsed.UserID {
+			sessions = append(sessions, parsed.IP)
+		}
+	}
+	if err := iter.Err(); err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	return c.Status(200).JSON(sessions)
+}
 
 type PostSessions struct {
 	Email    string  `json:"email" validate:"required,email"`
@@ -306,7 +351,7 @@ func postSessions(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"token": token})
 }
 
-func deleteSessions(c *fiber.Ctx) error {
+func deleteSession(c *fiber.Ctx) error {
 	authorization := c.Params("token")
 	if authorization == "" {
 		return c.Status(401).JSON(errors.AuthorizationMissing)
