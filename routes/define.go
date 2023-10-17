@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"runik-api/email"
@@ -77,6 +78,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Get("/", getUsers)
 	users.Get("/sessions", getSessions)
 	users.Post("/sessions", postSessions)
+	users.Delete("/sessions", deleteSessions)
 	users.Delete("/sessions/:token", deleteSession)
 	users.Get("/me", getMe)
 	users.Put("/me/email", putEmail)
@@ -361,6 +363,75 @@ func deleteSession(c *fiber.Ctx) error {
 		return c.Status(500).JSON(errors.ServerRedisError)
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"success": s != 0})
+}
+
+type DeleteSessions struct {
+	Password string `json:"password" validate:"required,min=8,max=32"`
+}
+
+func deleteSessions(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	var body DeleteSessions
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(errors.MalformedBody(err))
+	}
+	errs := _validate.Validate(body)
+	if err := handleValidateErrors(errs); err != nil {
+		return err
+	}
+
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	var user structs.User
+	if err := db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Select("password").First(&user).Error; err != nil {
+		return c.Status(400).JSON(errors.UserCredentialsInvalid)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		return c.Status(400).JSON(errors.UserCredentialsInvalid)
+	}
+	keys, _, err := rdb.Scan(ctx, 0, "session:"+"*", 0).Result()
+	if err != nil {
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var wg sync.WaitGroup
+	for _, key := range keys {
+		wg.Add(1)
+		go func(key string) {
+			defer wg.Done()
+			session, err := rdb.Get(ctx, key).Result()
+			if err != nil {
+				return
+			}
+			var parsedSession structs.Session
+			err = sonic.UnmarshalString(session, &parsedSession)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			if parsedSession.UserID == parsed.UserID {
+				_, err = rdb.Del(ctx, key).Result()
+				if err != nil {
+					return
+				}
+			}
+		}(key)
+	}
+	wg.Wait()
+	return c.Status(200).JSON(fiber.Map{"deleted": len(keys)})
 }
 func getMe(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
