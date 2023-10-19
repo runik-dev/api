@@ -1,7 +1,7 @@
 package structs
 
 import (
-	"gorm.io/gorm"
+	"time"
 )
 
 type Environment struct {
@@ -18,11 +18,12 @@ type Environment struct {
 	Rps              string
 }
 type User struct {
-	gorm.Model
-	ID       string `gorm:"uniqueIndex"`
-	Email    string `gorm:"uniqueIndex"`
-	Password string `gorm:"notNull"`
-	Verified bool   `gorm:"default:false"`
+	ID        string `gorm:"uniqueIndex"`
+	Email     string `gorm:"uniqueIndex"`
+	Password  string `gorm:"notNull"`
+	Verified  bool   `gorm:"default:false"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 type ApiUser struct {
 	ID       string `json:"id"`

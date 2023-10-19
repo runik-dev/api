@@ -72,17 +72,22 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	v1 := r.Group("/api/v1")
 	users := v1.Group("/users")
 
-	users.Post("/verify", postVerify)
-	users.Put("/verify/:token", putVerify)
 	users.Post("/", postUsers)
 	users.Get("/", getUsers)
-	users.Get("/sessions", getSessions)
+
 	users.Post("/sessions", postSessions)
 	users.Delete("/sessions", deleteSessions)
+	users.Get("/sessions", getSessions)
 	users.Delete("/sessions/:token", deleteSession)
+
 	users.Get("/me", getMe)
 	users.Put("/me/email", putEmail)
 	users.Put("/me/password", putPassword)
+	users.Delete("/me", deleteUser)
+
+	users.Post("/verify", postVerify)
+	users.Put("/verify/:token", putVerify)
+
 	users.Post("/reset", postReset)
 	users.Put("/reset/:token", putReset)
 }
@@ -135,6 +140,21 @@ func (v XValidator) Validate(data interface{}) []ErrorResponse {
 	return validationErrors
 }
 
+func sendResetEmail(c *fiber.Ctx, email string, url string, token string) error {
+	err := sender.SendEmail(email, "Reset password", "Reset your password: "+url+"/"+token)
+	if err != nil {
+		return c.Status(500).JSON(errors.ServerEmailSend)
+	}
+	return nil
+}
+func sendVerifyEmail(c *fiber.Ctx, email string, url string, token string) error {
+	err := sender.SendEmail(email, "Verify Email", "Verify your account: "+url+"/"+token)
+	if err != nil {
+		return c.Status(500).JSON(errors.ServerEmailSend)
+	}
+	return nil
+}
+
 type PostVerifyBody struct {
 	Email string `json:"email" validate:"required,email"`
 	Url   string `json:"url" validate:"required,url"`
@@ -163,9 +183,8 @@ func postVerify(c *fiber.Ctx) error {
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
 	}
-	emailErr := sender.SendEmail(body.Email, "Verify Email", "Verify your account: "+body.Url+"/"+token)
-	if emailErr != nil {
-		return c.Status(500).JSON(errors.ServerEmailSend)
+	if err := sendResetEmail(c, body.Email, body.Url, token); err != nil {
+		return err
 	}
 	_, redErr := rdb.Set(ctx, "verification:"+token, user.ID, 30*time.Minute).Result()
 	if redErr != nil {
@@ -209,17 +228,17 @@ func postUsers(c *fiber.Ctx) error {
 	if err := handleValidateErrors(errs); err != nil {
 		return err
 	}
-	avaiable, _ := emailAvailable(body.Email)
-	if !avaiable {
+	available, _ := emailAvailable(body.Email)
+	if !available {
 		return c.Status(400).JSON(errors.UserEmailTaken)
 	}
+	fmt.Printf("available: %v\n", available)
 	token, tokenErr := utils.RandString(32)
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
 	}
-	emailErr := sender.SendEmail(body.Email, "Verify Email", "Verify your account: "+body.Url+"/"+token)
-	if emailErr != nil {
-		return c.Status(500).JSON(errors.ServerEmailSend)
+	if err := sendResetEmail(c, body.Email, body.Url, token); err != nil {
+		return err
 	}
 	id := generator.Generate()
 	_, redErr := rdb.Set(ctx, "verification:"+token, id.String(), 30*time.Minute).Result()
@@ -231,7 +250,14 @@ func postUsers(c *fiber.Ctx) error {
 		return c.Status(500).JSON(errors.ServerHash)
 	}
 	user := structs.User{ID: id.String(), Email: body.Email, Password: string(hash)}
-	db.Create(&user)
+	fmt.Println(user)
+	err = db.Create(&user).Error
+	if err == gorm.ErrDuplicatedKey {
+		return c.Status(400).JSON(errors.UserEmailTaken)
+	} else if err != nil {
+		fmt.Println(err)
+		return c.Status(500).JSON(errors.ServerSqlError)
+	}
 	return c.Status(200).JSON(fiber.Map{"id": id.String()})
 }
 func getUsers(c *fiber.Ctx) error {
@@ -257,6 +283,34 @@ func getUsers(c *fiber.Ctx) error {
 
 	return c.Status(200).JSON(users)
 }
+func getSessionIps(c *fiber.Ctx, userId string) ([]string, error) {
+	iter := rdb.Scan(ctx, 0, "session:*", 0).Iterator()
+	var sessions []string
+	for iter.Next(ctx) {
+		key := iter.Val()
+		val, err := rdb.Get(ctx, key).Result()
+		fmt.Println(key, val)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil, c.Status(500).JSON(errors.ServerRedisError)
+		}
+		var parsed structs.Session
+		err = sonic.UnmarshalString(val, &parsed)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil, c.Status(500).JSON(errors.ServerParseError)
+		}
+		if parsed.UserID == userId {
+			sessions = append(sessions, parsed.IP)
+		}
+	}
+	if err := iter.Err(); err != nil {
+		fmt.Println(err.Error())
+		return nil, c.Status(500).JSON(errors.ServerRedisError)
+	}
+	fmt.Println(sessions)
+	return sessions, nil
+}
 func getSessions(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization == "" {
@@ -275,29 +329,9 @@ func getSessions(c *fiber.Ctx) error {
 		fmt.Println(err.Error())
 		return c.Status(500).JSON(errors.ServerParseError)
 	}
-	// find all entries with rdb where key starts with session: and the value includes parsed.UserID
-	iter := rdb.Scan(ctx, 0, "session:*", 0).Iterator()
-	var sessions []string
-	for iter.Next(ctx) {
-		key := iter.Val()
-		val, err := rdb.Get(ctx, key).Result()
-		if err != nil {
-			fmt.Println(err.Error())
-			return c.Status(500).JSON(errors.ServerRedisError)
-		}
-		var parsed structs.Session
-		err = sonic.UnmarshalString(val, &parsed)
-		if err != nil {
-			fmt.Println(err.Error())
-			return c.Status(500).JSON(errors.ServerParseError)
-		}
-		if parsed.UserID == parsed.UserID {
-			sessions = append(sessions, parsed.IP)
-		}
-	}
-	if err := iter.Err(); err != nil {
-		fmt.Println(err.Error())
-		return c.Status(500).JSON(errors.ServerRedisError)
+	sessions, err := getSessionIps(c, parsed.UserID)
+	if err != nil {
+		return err
 	}
 	return c.Status(200).JSON(sessions)
 }
@@ -305,11 +339,69 @@ func getSessions(c *fiber.Ctx) error {
 type PostSessions struct {
 	Email    string  `json:"email" validate:"required,email"`
 	Password string  `json:"password" validate:"required,min=8,max=32"`
-	Expire   bool    `json:"expire" validate:"required,boolean"`
+	Expire   bool    `json:"expire" validate:"omitempty,boolean"`
 	IP       *string `json:"ip" validate:"omitempty,ip"`
 }
 
+func getExpiration(body PostSessions) time.Duration {
+	if body.Expire {
+		return time.Hour * 24 * 10
+	} else {
+		return -1
+	}
+}
+func getIp(body PostSessions, c *fiber.Ctx) string {
+	if body.IP == nil {
+		return c.IP()
+	} else {
+		return *body.IP
+	}
+}
 func postSessions(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization != env.GlobalAuth {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	}
+
+	var body PostSessions
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(errors.MalformedBody(err))
+	}
+	errs := _validate.Validate(body)
+	if err := handleValidateErrors(errs); err != nil {
+		return err
+	}
+
+	var user structs.User
+	if err := db.Where(&structs.User{Email: body.Email}).First(&user).Error; err != nil {
+		fmt.Println("User not found")
+		return c.Status(400).JSON(errors.UserCredentialsInvalid)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		fmt.Println("password wrong")
+		return c.Status(400).JSON(errors.UserCredentialsInvalid)
+	}
+	ip := getIp(body, c)
+	expiration := getExpiration(body)
+	token, err := utils.RandString(32)
+	if err != nil {
+		return c.Status(400).JSON(errors.ServerTokenGenerate)
+	}
+	stringified, err := sonic.Marshal(structs.Session{UserID: user.ID, IP: ip})
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerStringifyError)
+	}
+	rdb.Set(ctx, "session:"+token, stringified, expiration)
+	return c.JSON(fiber.Map{"token": token})
+}
+
+type DeleteUser struct {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8,max=32"`
+}
+
+func deleteUser(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization != env.GlobalAuth {
 		return c.Status(401).JSON(errors.AuthorizationInvalid)
@@ -331,26 +423,11 @@ func postSessions(c *fiber.Ctx) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		return c.Status(400).JSON(errors.UserCredentialsInvalid)
 	}
-	ip := body.IP
-	if ip == nil {
-		clientIp := c.IP()
-		ip = &clientIp
-	}
-	var expiration time.Duration = -1
-	if body.Expire {
-		expiration = time.Hour * 24 * 10
-	}
-	token, err := utils.RandString(32)
+	err := db.Delete(&user).Error
 	if err != nil {
-		return c.Status(400).JSON(errors.ServerTokenGenerate)
+		return c.Status(500).JSON(errors.ServerSqlError)
 	}
-	stringified, err := sonic.Marshal(structs.Session{UserID: user.ID, IP: *ip})
-	if err != nil {
-		fmt.Println(err.Error())
-		return c.Status(500).JSON(errors.ServerStringifyError)
-	}
-	rdb.Set(ctx, "session:"+token, stringified, expiration)
-	return c.JSON(fiber.Map{"token": token})
+	return c.Status(http.StatusNoContent).Send(nil)
 }
 
 func deleteSession(c *fiber.Ctx) error {
@@ -369,6 +446,37 @@ type DeleteSessions struct {
 	Password string `json:"password" validate:"required,min=8,max=32"`
 }
 
+func deleteSessionEntries(parsed structs.Session, c *fiber.Ctx) ([]string, error) {
+	keys, _, err := rdb.Scan(ctx, 0, "session:"+"*", 0).Result()
+	if err != nil {
+		return nil, c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var wg sync.WaitGroup
+	for _, key := range keys {
+		wg.Add(1)
+		go func(key string) {
+			defer wg.Done()
+			session, err := rdb.Get(ctx, key).Result()
+			if err != nil {
+				return
+			}
+			var parsedSession structs.Session
+			err = sonic.UnmarshalString(session, &parsedSession)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			if parsedSession.UserID == parsed.UserID {
+				_, err = rdb.Del(ctx, key).Result()
+				if err != nil {
+					return
+				}
+			}
+		}(key)
+	}
+	wg.Wait()
+	return keys, nil
+}
 func deleteSessions(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization == "" {
@@ -403,34 +511,10 @@ func deleteSessions(c *fiber.Ctx) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		return c.Status(400).JSON(errors.UserCredentialsInvalid)
 	}
-	keys, _, err := rdb.Scan(ctx, 0, "session:"+"*", 0).Result()
+	keys, err := deleteSessionEntries(parsed, c)
 	if err != nil {
-		return c.Status(500).JSON(errors.ServerRedisError)
+		return err
 	}
-	var wg sync.WaitGroup
-	for _, key := range keys {
-		wg.Add(1)
-		go func(key string) {
-			defer wg.Done()
-			session, err := rdb.Get(ctx, key).Result()
-			if err != nil {
-				return
-			}
-			var parsedSession structs.Session
-			err = sonic.UnmarshalString(session, &parsedSession)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			if parsedSession.UserID == parsed.UserID {
-				_, err = rdb.Del(ctx, key).Result()
-				if err != nil {
-					return
-				}
-			}
-		}(key)
-	}
-	wg.Wait()
 	return c.Status(200).JSON(fiber.Map{"deleted": len(keys)})
 }
 func getMe(c *fiber.Ctx) error {
@@ -518,9 +602,8 @@ func putEmail(c *fiber.Ctx) error {
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
 	}
-	emailErr := sender.SendEmail(body.Email, "Verify Email", "Verify your account: "+body.Url+"/"+token)
-	if emailErr != nil {
-		return c.Status(500).JSON(errors.ServerEmailSend)
+	if err := sendResetEmail(c, body.Email, body.Url, token); err != nil {
+		return err
 	}
 	_, redErr := rdb.Set(ctx, "verification:"+token, parsed.UserID, 30*time.Minute).Result()
 	if redErr != nil {
@@ -604,10 +687,10 @@ func postReset(c *fiber.Ctx) error {
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
 	}
-	emailErr := sender.SendEmail(body.Email, "Reset password", "Reset your password: "+body.Url+"/"+token)
-	if emailErr != nil {
-		return c.Status(500).JSON(errors.ServerEmailSend)
+	if err := sendResetEmail(c, body.Email, body.Url, token); err != nil {
+		return err
 	}
+
 	_, redErr := rdb.Set(ctx, "reset:"+token, user.ID, 30*time.Minute).Result()
 	if redErr != nil {
 		return c.Status(500).JSON(errors.ServerRedisError)

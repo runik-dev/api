@@ -65,6 +65,16 @@ Get all sessions for this account
 Response
 `ip[]`
 
+### DELETE /users/sessions
+
+[Session Auth](#session-auth)
+
+Delete all sessions for this account
+
+| Field    | Constraints             | Description   |
+| :------- | :---------------------- | :------------ |
+| password | required, min 8, max 32 | user password |
+
 ### DELETE /users/sessions/:token
 
 [Session Auth](#session-auth)
@@ -83,6 +93,15 @@ Get the signed in user
 
 Response
 [User](#user)
+
+### DELETE /users/me
+
+Delete signed in user
+
+| Field    | Constraints             | Description   |
+| :------- | :---------------------- | :------------ |
+| email    | required, email         | user email    |
+| password | required, min 8, max 32 | user password |
 
 ### PUT /users/me/email
 
