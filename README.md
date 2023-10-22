@@ -1,6 +1,6 @@
 # Runik API
 
-`v0.1.3`
+`v0.1.4`
 User management API built with PostgreSQL, Redis, Fiber, and GORM
 
 ## Authorization
@@ -27,7 +27,7 @@ Create user
 | Field    | Constraints             | Description                       |
 | :------- | :---------------------- | :-------------------------------- |
 | email    | required, email         | user email                        |
-| password | required, min 8, max 32 | user password                     |
+| password | required, min=8, max=32 | user password                     |
 | url      | required, url           | url to send in verification email |
 
 Returns
@@ -52,8 +52,8 @@ Create a session
 | Field    | Constraints              | Description                               |
 | :------- | :----------------------- | :---------------------------------------- |
 | email    | required, email          | login email                               |
-| password | required, min 8, max 32  | login password                            |
-| expire   | required, boolean        | whether session will expire after 10 days |
+| password | required, min=8, max=32  | login password                            |
+| expire   | default=false, boolean   | whether session will expire after 10 days |
 | ip       | default to client ip, ip | ip that created session                   |
 
 ### GET /users/sessions
@@ -73,7 +73,7 @@ Delete all sessions for this account
 
 | Field    | Constraints             | Description   |
 | :------- | :---------------------- | :------------ |
-| password | required, min 8, max 32 | user password |
+| password | required, min=8, max=32 | user password |
 
 ### DELETE /users/sessions/:token
 
@@ -96,12 +96,13 @@ Response
 
 ### DELETE /users/me
 
+[Session Auth](#session-auth)
+
 Delete signed in user
 
 | Field    | Constraints             | Description   |
 | :------- | :---------------------- | :------------ |
-| email    | required, email         | user email    |
-| password | required, min 8, max 32 | user password |
+| password | required, min=8, max=32 | user password |
 
 ### PUT /users/me/email
 
@@ -122,8 +123,8 @@ Update the signed in users email and issue a verification request
 
 | Field       | Constraints                       | Description               |
 | :---------- | :-------------------------------- | :------------------------ |
-| oldPassword | required, min 8, max 32           | the current password      |
-| newPassword | required, required, min 8, max 32 | the password to update to |
+| oldPassword | required, min=8, max=32           | the current password      |
+| newPassword | required, required, min=8, max=32 | the password to update to |
 
 ### POST /users/verify
 
@@ -158,7 +159,7 @@ Update a password from a reset request
 
 | Field    | Constraints             | Description      |
 | :------- | :---------------------- | :--------------- |
-| password | required, min 8, max 32 | the new password |
+| password | required, min=8, max=32 | the new password |
 
 ### User
 

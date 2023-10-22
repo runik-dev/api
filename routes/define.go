@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -83,7 +82,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Get("/me", getMe)
 	users.Put("/me/email", putEmail)
 	users.Put("/me/password", putPassword)
-	users.Delete("/me", deleteUser)
+	users.Delete("/me", deleteMe)
 
 	users.Post("/verify", postVerify)
 	users.Put("/verify/:token", putVerify)
@@ -98,7 +97,7 @@ func emailAvailable(email string) (bool, structs.User) {
 	return found == gorm.ErrRecordNotFound, user
 }
 
-func handleValidateErrors(errs []ErrorResponse) error {
+func handleValidateErrors(errs []ErrorResponse, c *fiber.Ctx) error {
 	if len(errs) > 0 && errs[0].Error {
 		errMsgs := make([]string, 0)
 
@@ -110,11 +109,7 @@ func handleValidateErrors(errs []ErrorResponse) error {
 				err.Tag,
 			))
 		}
-
-		return &fiber.Error{
-			Code:    fiber.ErrBadRequest.Code,
-			Message: strings.Join(errMsgs, " and "),
-		}
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": errMsgs, "code": "malformed_body"})
 	}
 	return nil
 }
@@ -171,7 +166,7 @@ func postVerify(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 	_, user := emailAvailable(body.Email)
@@ -225,14 +220,13 @@ func postUsers(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 	available, _ := emailAvailable(body.Email)
 	if !available {
 		return c.Status(400).JSON(errors.UserEmailTaken)
 	}
-	fmt.Printf("available: %v\n", available)
 	token, tokenErr := utils.RandString(32)
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
@@ -250,7 +244,6 @@ func postUsers(c *fiber.Ctx) error {
 		return c.Status(500).JSON(errors.ServerHash)
 	}
 	user := structs.User{ID: id.String(), Email: body.Email, Password: string(hash)}
-	fmt.Println(user)
 	err = db.Create(&user).Error
 	if err == gorm.ErrDuplicatedKey {
 		return c.Status(400).JSON(errors.UserEmailTaken)
@@ -289,7 +282,6 @@ func getSessionIps(c *fiber.Ctx, userId string) ([]string, error) {
 	for iter.Next(ctx) {
 		key := iter.Val()
 		val, err := rdb.Get(ctx, key).Result()
-		fmt.Println(key, val)
 		if err != nil {
 			fmt.Println(err.Error())
 			return nil, c.Status(500).JSON(errors.ServerRedisError)
@@ -308,7 +300,6 @@ func getSessionIps(c *fiber.Ctx, userId string) ([]string, error) {
 		fmt.Println(err.Error())
 		return nil, c.Status(500).JSON(errors.ServerRedisError)
 	}
-	fmt.Println(sessions)
 	return sessions, nil
 }
 func getSessions(c *fiber.Ctx) error {
@@ -368,7 +359,7 @@ func postSessions(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 
@@ -397,33 +388,45 @@ func postSessions(c *fiber.Ctx) error {
 }
 
 type DeleteUser struct {
-	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8,max=32"`
 }
 
-func deleteUser(c *fiber.Ctx) error {
+func deleteMe(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
-	if authorization != env.GlobalAuth {
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
 		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
 	}
 
-	var body PostSessions
+	var body DeleteUser
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 
 	var user structs.User
-	if err := db.Where(&structs.User{Email: body.Email}).First(&user).Error; err != nil {
+	if err := db.Where(&structs.User{ID: parsed.UserID}).First(&user).Error; err != nil {
 		return c.Status(400).JSON(errors.UserCredentialsInvalid)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		return c.Status(400).JSON(errors.UserCredentialsInvalid)
 	}
-	err := db.Delete(&user).Error
+	err = db.Delete(&user).Error
 	if err != nil {
 		return c.Status(500).JSON(errors.ServerSqlError)
 	}
@@ -487,7 +490,7 @@ func deleteSessions(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 
@@ -591,7 +594,7 @@ func putEmail(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 	avaiable, _ := emailAvailable(body.Email)
@@ -642,7 +645,7 @@ func putPassword(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 	var user structs.User
@@ -676,7 +679,7 @@ func postReset(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 	available, user := emailAvailable(body.Email)
@@ -718,7 +721,7 @@ func putReset(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs); err != nil {
+	if err := handleValidateErrors(errs, c); err != nil {
 		return err
 	}
 	rdb.Del(ctx, "reset:"+token)
