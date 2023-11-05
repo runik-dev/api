@@ -17,6 +17,7 @@ import (
 	"runik-api/database"
 	"runik-api/email"
 	"runik-api/routes"
+	"runik-api/storage"
 	"runik-api/structs"
 )
 
@@ -40,6 +41,7 @@ func checkEnv() (structs.Environment, error) {
 		{"REDIS_PASSWORD", &env.RedisPassword},
 		{"PORT", &env.Port},
 		{"RPS", &env.Rps},
+		{"STORAGE_BUCKET", &env.StorageBucket},
 	}
 
 	for _, v := range envVars {
@@ -61,6 +63,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to convert RPS to integer")
 	}
+	client, bucket := storage.Connect(&env)
+	defer client.Close()
+
 	db := database.Connect(&env)
 	rdb := database.RedisConnect(&env)
 	sender := email.NewEmailSender(env.SmtpHost, env.SmtpPort, env.SenderUsername, env.SenderPassword, env.SenderEmail)
@@ -89,7 +94,7 @@ func main() {
 	}))
 	app.Get("/monitor", monitor.New())
 	// router.Use(middleware.LeakBucket(limiter))
-	routes.DefineRoutes(app, db, rdb, &env, sender)
+	routes.DefineRoutes(app, db, rdb, &env, sender, bucket)
 
 	app.Listen(":" + env.Port)
 }

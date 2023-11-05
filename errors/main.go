@@ -22,3 +22,4 @@ var ServerStringifyError = fiber.Map{"code": "server_failed_stringify"}
 var ServerTokenGenerate = fiber.Map{"code": "server_failed_token"}
 var ServerSqlError = fiber.Map{"code": "server_sql_error"}
 var ServerRedisError = fiber.Map{"code": "server_redis_error"}
+var ServerImageError = fiber.Map{"code": "server_image_error"}

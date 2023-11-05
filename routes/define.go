@@ -10,6 +10,7 @@ import (
 
 	"runik-api/email"
 	"runik-api/errors"
+	"runik-api/storage"
 	"runik-api/structs"
 	"runik-api/utils"
 
@@ -19,7 +20,10 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+
 	"gorm.io/gorm"
+
+	googleStorage "cloud.google.com/go/storage"
 )
 
 var (
@@ -51,7 +55,7 @@ type (
 	}
 )
 
-func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, environment *structs.Environment, emailSender *email.EmailSender) {
+func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, environment *structs.Environment, emailSender *email.EmailSender, bucket *googleStorage.BucketHandle) {
 	db = database
 	rdb = redisDatabase
 	env = environment
@@ -83,6 +87,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Put("/me/email", putEmail)
 	users.Put("/me/password", putPassword)
 	users.Delete("/me", deleteMe)
+	users.Put("/me/avatar", putAvatar)
 
 	users.Post("/verify", postVerify)
 	users.Put("/verify/:token", putVerify)
@@ -97,10 +102,9 @@ func emailAvailable(email string) (bool, structs.User) {
 	return found == gorm.ErrRecordNotFound, user
 }
 
-func handleValidateErrors(errs []ErrorResponse, c *fiber.Ctx) error {
-	if len(errs) > 0 && errs[0].Error {
+func handleValidateErrors(errs []ErrorResponse, c *fiber.Ctx) (error, bool) {
+	if len(errs) > 0 {
 		errMsgs := make([]string, 0)
-
 		for _, err := range errs {
 			errMsgs = append(errMsgs, fmt.Sprintf(
 				"[%s]: '%v' | Needs to implement '%s'",
@@ -109,9 +113,10 @@ func handleValidateErrors(errs []ErrorResponse, c *fiber.Ctx) error {
 				err.Tag,
 			))
 		}
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": errMsgs, "code": "malformed_body"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": errMsgs, "code": "malformed_body"}), true
+	} else {
+		return nil, false
 	}
-	return nil
 }
 
 func (v XValidator) Validate(data interface{}) []ErrorResponse {
@@ -166,7 +171,8 @@ func postVerify(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 	_, user := emailAvailable(body.Email)
@@ -178,7 +184,7 @@ func postVerify(c *fiber.Ctx) error {
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
 	}
-	if err := sendResetEmail(c, body.Email, body.Url, token); err != nil {
+	if err := sendVerifyEmail(c, body.Email, body.Url, token); err != nil {
 		return err
 	}
 	_, redErr := rdb.Set(ctx, "verification:"+token, user.ID, 30*time.Minute).Result()
@@ -220,7 +226,8 @@ func postUsers(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 	available, _ := emailAvailable(body.Email)
@@ -359,7 +366,8 @@ func postSessions(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 
@@ -415,7 +423,8 @@ func deleteMe(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 
@@ -429,6 +438,56 @@ func deleteMe(c *fiber.Ctx) error {
 	err = db.Delete(&user).Error
 	if err != nil {
 		return c.Status(500).JSON(errors.ServerSqlError)
+	}
+	return c.Status(http.StatusNoContent).Send(nil)
+}
+
+type PutAvatar struct {
+	Image string `json:"image" validate:"required,base64"`
+}
+
+func putAvatar(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+
+	var body PutAvatar
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(errors.MalformedBody(err))
+	}
+	errs := _validate.Validate(body)
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+		return err
+	}
+
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	resized, err := storage.Resize(body.Image, 128, 128)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerImageError)
+	}
+	webp, err := storage.ToWebp(resized)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerImageError)
+	}
+	err = storage.Upload(parsed.UserID, *webp)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerImageError)
 	}
 	return c.Status(http.StatusNoContent).Send(nil)
 }
@@ -490,7 +549,8 @@ func deleteSessions(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 
@@ -594,7 +654,8 @@ func putEmail(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 	avaiable, _ := emailAvailable(body.Email)
@@ -645,7 +706,8 @@ func putPassword(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 	var user structs.User
@@ -679,7 +741,8 @@ func postReset(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 	available, user := emailAvailable(body.Email)
@@ -721,7 +784,8 @@ func putReset(c *fiber.Ctx) error {
 		return c.Status(400).JSON(errors.MalformedBody(err))
 	}
 	errs := _validate.Validate(body)
-	if err := handleValidateErrors(errs, c); err != nil {
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+
 		return err
 	}
 	rdb.Del(ctx, "reset:"+token)

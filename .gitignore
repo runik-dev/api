@@ -1,2 +1,4 @@
 .env
 .dccache
+*.json
+runik-api.exe

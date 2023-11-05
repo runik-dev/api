@@ -16,6 +16,7 @@ type Environment struct {
 	RedisPassword    string
 	Port             string
 	Rps              string
+	StorageBucket    string
 }
 type User struct {
 	ID        string `gorm:"uniqueIndex"`
