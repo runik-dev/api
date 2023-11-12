@@ -239,7 +239,7 @@ func postUsers(c *fiber.Ctx) error {
 	if tokenErr != nil {
 		return c.Status(500).JSON(errors.ServerTokenGenerate)
 	}
-	if err := sendResetEmail(c, body.Email, body.Url, token); err != nil {
+	if err := sendVerifyEmail(c, body.Email, body.Url, token); err != nil {
 		return err
 	}
 	id := generator.Generate()
