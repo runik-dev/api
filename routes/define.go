@@ -622,28 +622,15 @@ func getMe(c *fiber.Ctx) error {
 		fmt.Println(err.Error())
 		return c.Status(500).JSON(errors.ServerParseError)
 	}
-	cached, err := rdb.Get(ctx, "user:"+parsed.UserID).Result()
 	var user structs.ApiUser
-	if err == redis.Nil {
-		err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).First(&user).Error
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(404).JSON(errors.NotFound)
-		} else if err != nil {
-			return c.Status(500).JSON(errors.ServerSqlError)
-		}
-		stringified, err := sonic.Marshal(&user)
-		if err != nil {
-			return c.Status(500).JSON(errors.ServerStringifyError)
-		}
-		rdb.Set(ctx, "user:"+parsed.UserID, stringified, 2*time.Minute)
+	err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).First(&user).Error
+	if err == gorm.ErrRecordNotFound {
+		return c.Status(404).JSON(errors.NotFound)
 	} else if err != nil {
-		return c.Status(500).JSON(errors.ServerRedisError)
-	} else {
-		err = sonic.UnmarshalString(cached, &user)
-		if err != nil {
-			fmt.Println(err.Error())
-			return c.Status(500).JSON(errors.ServerParseError)
-		}
+		return c.Status(500).JSON(errors.ServerSqlError)
+	}
+	if err != nil {
+		return c.Status(500).JSON(errors.ServerStringifyError)
 	}
 
 	return c.Status(200).JSON(user)
