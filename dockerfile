@@ -1,6 +1,6 @@
 FROM golang:1.21.4-alpine
 
-RUN apk add --no-cache build-base
+RUN apk add --no-cache build-base dumb-init
 
 COPY . /app
 
@@ -11,6 +11,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 RUN go build -o bin .
 
-ENTRYPOINT [ "/app/bin" ]
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ./app
 
 EXPOSE 3000
