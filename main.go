@@ -23,7 +23,7 @@ import (
 
 var ctx = context.Background()
 
-func checkEnv() (structs.Environment, error) {
+func checkEnv() structs.Environment {
 	var env structs.Environment
 
 	envVars := []struct {
@@ -52,12 +52,12 @@ func checkEnv() (structs.Environment, error) {
 		*v.field = value
 	}
 
-	return env, nil
+	return env
 }
 
 func main() {
 
-	env, err := checkEnv()
+	env := checkEnv()
 
 	rpsInt, err := strconv.Atoi(env.Rps)
 	if err != nil {
@@ -73,6 +73,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
+		Prefork:     true,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			return c.Status(fiber.StatusBadRequest).JSON(routes.GlobalErrorHandlerResp{
 				Success: false,
