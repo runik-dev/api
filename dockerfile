@@ -1,11 +1,14 @@
-FROM golang:1.21.1-alpine
+FROM golang:1.21.4-alpine
+
+RUN apk add --no-cache build-base
+
+COPY . /app
 
 WORKDIR /app
 
-COPY go.mod .
-COPY main.go .
-
-RUN go get
+ENV CGO_ENABLED=1
+COPY go.mod go.sum ./
+RUN go mod download
 RUN go build -o bin .
 
 ENTRYPOINT [ "/app/bin" ]
