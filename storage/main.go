@@ -61,3 +61,7 @@ func Upload(name string, buffer bytes.Buffer) error {
 	}
 	return nil
 }
+func Remove(name string) error {
+	err := bucket.Object("avatars/" + name + ".webp").Delete(ctx)
+	return err
+}

@@ -88,6 +88,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Put("/me/password", putPassword)
 	users.Delete("/me", deleteMe)
 	users.Put("/me/avatar", putAvatar)
+	users.Delete("/me/avatar", deleteAvatar)
 
 	users.Post("/verify", postVerify)
 	users.Put("/verify/:token", putVerify)
@@ -491,7 +492,30 @@ func putAvatar(c *fiber.Ctx) error {
 	}
 	return c.Status(http.StatusNoContent).Send(nil)
 }
-
+func deleteAvatar(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	if err := storage.Remove(parsed.UserID); err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerStorageError)
+	}
+	return c.Status(204).Send(nil)
+}
 func deleteSession(c *fiber.Ctx) error {
 	authorization := c.Params("token")
 	if authorization == "" {
