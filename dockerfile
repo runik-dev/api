@@ -12,6 +12,5 @@ RUN go mod download
 RUN go build -o bin .
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ./app
 
 EXPOSE 3000
