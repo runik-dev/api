@@ -10,6 +10,7 @@ import (
 
 	"runik-api/email"
 	"runik-api/errors"
+	"runik-api/nsfw"
 	"runik-api/storage"
 	"runik-api/structs"
 	"runik-api/utils"
@@ -95,6 +96,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 
 	users.Post("/reset", postReset)
 	users.Put("/reset/:token", putReset)
+
 }
 
 func emailAvailable(email string) (bool, structs.User) {
@@ -485,6 +487,14 @@ func putAvatar(c *fiber.Ctx) error {
 		fmt.Println(err.Error())
 		return c.Status(500).JSON(errors.ServerImageError)
 	}
+	isNsfw, err := nsfw.IsNsfw(webp)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	if isNsfw {
+		return c.Status(400).JSON(errors.ImageNsfw)
+	}
+	fmt.Println("not nsfw")
 	err = storage.Upload(parsed.UserID, *webp)
 	if err != nil {
 		fmt.Println(err.Error())
