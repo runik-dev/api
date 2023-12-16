@@ -14,7 +14,7 @@ func Connect(env *structs.Environment) *gorm.DB {
 	if err != nil {
 		log.Fatal("failed to connect to db", err)
 	}
-	db.AutoMigrate(&structs.User{})
+	db.AutoMigrate(&structs.User{}, &structs.Project{})
 
 	return db
 }
