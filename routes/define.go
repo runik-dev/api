@@ -98,6 +98,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	projects.Get("/", getProjects)
 	projects.Post("/", createProject)
 	projects.Patch("/files", updateContents)
+	projects.Get("/:id", getProject)
 }
 
 func emailAvailable(email string) (bool, structs.User) {

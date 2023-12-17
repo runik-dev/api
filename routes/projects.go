@@ -56,7 +56,22 @@ func getProjects(c *fiber.Ctx) error {
 
 	return c.Status(http.StatusOK).JSON(projects)
 }
+func getProject(c *fiber.Ctx) error {
+	projectId := c.Params("id")
+	if projectId == "" {
+		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
+	}
+	var project structs.ApiProject
 
+	err := db.Model(&structs.Project{}).Where(&structs.Project{ID: projectId}).First(&project).Error
+	if err == gorm.ErrRecordNotFound {
+		return c.Status(http.StatusNotFound).JSON(errors.NotFound)
+	}
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)
+	}
+	return c.Status(http.StatusOK).JSON(project)
+}
 type CreateBody struct {
 	Name string `json:"name" validate:"required,min=4,max=64"`
 }
