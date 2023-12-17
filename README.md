@@ -1,6 +1,6 @@
 # Runik API
 
-`v0.2.3`
+`v0.3.0`
 User management API built with PostgreSQL, Redis, Fiber, and GORM
 
 ## Authorization
