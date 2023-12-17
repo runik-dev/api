@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"code.gitea.io/sdk/gitea"
 	"github.com/bytedance/sonic"
@@ -16,6 +17,45 @@ import (
 	"runik-api/errors"
 	"runik-api/structs"
 )
+
+func getProjects(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+
+	var projects []structs.ApiProject
+	val, err := rdb.Get(ctx, "projects:"+parsed.UserID).Result()
+
+	if err != nil {
+		db.Model(&structs.Project{}).Where(&structs.Project{UserID: parsed.UserID}).Find(&projects)
+
+		json, err := sonic.Marshal(&projects)
+		if err == nil {
+			rdb.Set(ctx, "projects:"+parsed.UserID, json, 2*time.Minute)
+		}
+	} else {
+		err := sonic.UnmarshalString(val, &projects)
+		if err != nil {
+			return c.Status(500).JSON(errors.ServerParseError)
+		}
+	}
+
+	return c.Status(http.StatusOK).JSON(projects)
+}
 
 type CreateBody struct {
 	Name string `json:"name" validate:"required,min=4,max=64"`
