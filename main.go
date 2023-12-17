@@ -16,6 +16,7 @@ import (
 
 	"runik-api/database"
 	"runik-api/email"
+	"runik-api/git"
 	"runik-api/routes"
 	"runik-api/storage"
 	"runik-api/structs"
@@ -42,6 +43,10 @@ func checkEnv() structs.Environment {
 		{"PORT", &env.Port},
 		{"RPS", &env.Rps},
 		{"STORAGE_BUCKET", &env.StorageBucket},
+		{"GIT_TOKEN", &env.GitToken},
+		{"GIT_URL", &env.GitUrl},
+		{"GIT_USERNAME", &env.GitUsername},
+		{"GIT_TEMPLATE", &env.GitTemplate},
 	}
 
 	for _, v := range envVars {
@@ -56,7 +61,6 @@ func checkEnv() structs.Environment {
 }
 
 func main() {
-
 	env := checkEnv()
 
 	rpsInt, err := strconv.Atoi(env.Rps)
@@ -69,7 +73,10 @@ func main() {
 	db := database.Connect(&env)
 	rdb := database.RedisConnect(&env)
 	sender := email.NewEmailSender(env.SmtpHost, env.SmtpPort, env.SenderUsername, env.SenderPassword, env.SenderEmail)
-
+	git, err := git.Connect(&env)
+	if err != nil {
+		log.Fatal("Failed to connect to git", err.Error())
+	}
 	app := fiber.New(fiber.Config{
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
@@ -94,7 +101,7 @@ func main() {
 	}))
 	app.Get("/monitor", monitor.New())
 	// router.Use(middleware.LeakBucket(limiter))
-	routes.DefineRoutes(app, db, rdb, &env, sender, bucket)
+	routes.DefineRoutes(app, db, rdb, &env, sender, bucket, git)
 
 	app.Listen(":" + env.Port)
 }
