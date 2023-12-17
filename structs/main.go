@@ -17,6 +17,10 @@ type Environment struct {
 	Port             string
 	Rps              string
 	StorageBucket    string
+	GitToken         string
+	GitUrl           string
+	GitUsername      string
+	GitTemplate      string
 }
 type User struct {
 	ID        string `gorm:"type:bigint;primaryKey"`
@@ -36,7 +40,6 @@ type Project struct {
 	UserID    string `gorm:"type:bigint"`
 	User      User   `gorm:"foreignKey:UserID"`
 	Name      string `gorm:"notNull"`
-	GitUrl    string `gorm:"notNull"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

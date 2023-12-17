@@ -25,3 +25,6 @@ var ServerSqlError = fiber.Map{"code": "server_sql_error"}
 var ServerRedisError = fiber.Map{"code": "server_redis_error"}
 var ServerImageError = fiber.Map{"code": "server_image_error"}
 var ServerStorageError = fiber.Map{"code": "server_storage_error"}
+var ServerGitError = fiber.Map{"code": "server_git_error"}
+
+var ProjectNoAccess = fiber.Map{"code": "project_access_missing"}

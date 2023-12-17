@@ -9,6 +9,7 @@ import (
 	"runik-api/email"
 	"runik-api/structs"
 
+	"code.gitea.io/sdk/gitea"
 	"github.com/bwmarrin/snowflake"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v8"
@@ -24,10 +25,12 @@ var (
 	rdb       *redis.Client
 	env       *structs.Environment
 	sender    *email.EmailSender
-	ctx       = context.Background()
 	generator *snowflake.Node
-	validate  = validator.New()
 	_validate *XValidator
+	git       *gitea.Client
+
+	ctx      = context.Background()
+	validate = validator.New()
 )
 
 type (
@@ -48,11 +51,12 @@ type (
 	}
 )
 
-func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, environment *structs.Environment, emailSender *email.EmailSender, bucket *googleStorage.BucketHandle) {
+func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, environment *structs.Environment, emailSender *email.EmailSender, bucket *googleStorage.BucketHandle, gitClient *gitea.Client) {
 	db = database
 	rdb = redisDatabase
 	env = environment
 	sender = emailSender
+	git = gitClient
 	snowflake.Epoch = 1697015375
 	node, err := snowflake.NewNode(1)
 	if err != nil {
@@ -89,6 +93,10 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Post("/reset", postReset)
 	users.Put("/reset/:token", putReset)
 
+	projects := v1.Group("/projects")
+
+	projects.Post("/", createProject)
+	projects.Patch("/files", updateContents)
 }
 
 func emailAvailable(email string) (bool, structs.User) {
