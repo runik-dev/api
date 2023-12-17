@@ -43,6 +43,11 @@ type Project struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+type ApiProject struct {
+	ID     string `json:"id"`
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
+}
 type Session struct {
 	UserID string
 	IP     string

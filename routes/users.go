@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -68,16 +67,12 @@ func postUsers(c *fiber.Ctx) error {
 func getUsers(c *fiber.Ctx) error {
 	var users []structs.ApiUser
 	val, err := rdb.Get(ctx, "users").Result()
-	if err == redis.Nil {
+	if err != nil {
 		db.Model(&structs.User{}).Find(&users)
-		usersJSON, err := sonic.Marshal(&users)
-		if err != nil {
-			return c.Status(500).JSON(errors.ServerStringifyError)
-		}
 
-		err = rdb.Set(ctx, "users", usersJSON, 1*time.Minute).Err()
-		if err != nil {
-			return c.Status(500).JSON(errors.ServerRedisError)
+		json, err := sonic.Marshal(&users)
+		if err == nil {
+			rdb.Set(ctx, "users", json, 1*time.Minute)
 		}
 	} else {
 		err := sonic.Unmarshal([]byte(val), &users)
