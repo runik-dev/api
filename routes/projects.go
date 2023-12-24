@@ -12,6 +12,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"runik-api/errors"
@@ -125,7 +126,76 @@ func createProject(c *fiber.Ctx) error {
 	}
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"id": id.String()})
 }
+type DeleteProject struct {
+	Password string 			`json:"password" validate:"required,min=8,max=32"`
+}
+func deleteProject(c *fiber.Ctx) error {
+	projectId := c.Params("id")
+	if projectId == "" {
+		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
+	}
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
 
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+
+	var body DeleteProject
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(errors.MalformedBody(err))
+	}
+	errs := _validate.Validate(body)
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+		return err
+	}
+
+	var user structs.User
+	// Get user and error if not found
+	if err := db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Select("password").First(&user).Error; err != nil {
+		return c.Status(400).JSON(errors.UserCredentialsInvalid)
+	}
+	// Check password and error if it is wrong
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		return c.Status(400).JSON(errors.UserCredentialsInvalid)
+	}
+
+	var project structs.Project
+	// Get project and error if not found
+	err = db.Where(&structs.Project{ID: projectId}).First(&project).Error
+	if err == gorm.ErrRecordNotFound {
+		return c.Status(http.StatusNotFound).JSON(errors.NotFound)
+	}
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)
+	}
+
+	err = db.Delete(&project).Error
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)
+	}
+
+	// Delete repo and recreate project if it fails
+	name := parsed.UserID + "-" + projectId
+	_, err = git.DeleteRepo("runikbot", name)
+	if err != nil {
+		db.Create(project)
+		return c.Status(http.StatusInternalServerError).JSON(errors.ServerGitError)
+	}
+	return c.Status(http.StatusNoContent).Send(nil)
+}
 type UpdateBody struct {
 	ProjectId string            `json:"project_id" validate:"required"`
 	Files     map[string]string `json:"files" validate:"required"`
