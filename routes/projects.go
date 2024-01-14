@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -73,6 +75,7 @@ func getProject(c *fiber.Ctx) error {
 	}
 	return c.Status(http.StatusOK).JSON(project)
 }
+
 type CreateBody struct {
 	Name string `json:"name" validate:"required,min=4,max=64"`
 }
@@ -126,9 +129,11 @@ func createProject(c *fiber.Ctx) error {
 	}
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"id": id.String()})
 }
+
 type DeleteProject struct {
-	Password string 			`json:"password" validate:"required,min=8,max=32"`
+	Password string `json:"password" validate:"required,min=8,max=32"`
 }
+
 func deleteProject(c *fiber.Ctx) error {
 	projectId := c.Params("id")
 	if projectId == "" {
@@ -196,6 +201,7 @@ func deleteProject(c *fiber.Ctx) error {
 	}
 	return c.Status(http.StatusNoContent).Send(nil)
 }
+
 type UpdateBody struct {
 	ProjectId string            `json:"project_id" validate:"required"`
 	Files     map[string]string `json:"files" validate:"required"`
@@ -310,10 +316,116 @@ func updateContents(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerStringifyError)
 	}
 	url := env.GitUrl + "/api/v1/repos/" + env.GitUsername + "/" + name + "/contents?ref=dev&token=" + env.GitToken
-	req, err := http.Post(url, "application/json", bytes.NewReader(reqBody))
+	_, err = http.Post(url, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerGitError)
 	}
-	fmt.Println(req.Status)
+
 	return c.Status(http.StatusOK).JSON(result)
+}
+func getContents(c *fiber.Ctx) error {
+	projectId := c.Params("id")
+	if projectId == "" {
+		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
+	}
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	name := parsed.UserID + "-" + projectId
+	branch, _, err := git.GetRepoBranch("runikbot", name, "dev")
+
+	if err != nil && err.Error() == "The target couldn't be found." {
+		return c.Status(http.StatusNotFound).JSON(errors.NotFound)
+	}
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(errors.ServerGitError)
+	}
+	sha := branch.Commit.ID
+	url := env.GitUrl + "/api/v1/repos/" + env.GitUsername + "/" + name + "/git/trees/" + sha + "?recursive=true&token=" + env.GitToken
+	req, err := http.Get(url)
+	data, err := convertToFiles(req.Body)
+	if err != nil {
+		fmt.Println("err", err.Error())
+	}
+	return c.Status(req.StatusCode).JSON(data)
+}
+
+func readToString(reader io.ReadCloser) (string, error) {
+    defer reader.Close()
+
+    data, err := io.ReadAll(reader)
+    if err != nil {
+        return "", err
+    }
+
+    return string(data), nil
+}
+func convertToFiles(reader io.ReadCloser) (interface{}, error) {
+	jsonString, err := readToString(reader)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command("node", "./routes/convert.js", "--json", jsonString)
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("Error executing command:", err)
+		return nil, err
+	}
+	var json []interface{}
+	err = sonic.Unmarshal(output, &json)
+	if err != nil {
+		fmt.Println("Error executing command:", err)
+		return nil, err
+	}
+	return json, nil
+}
+func getFile(c *fiber.Ctx) error {
+	path := c.Query("path")
+	if path == "" {
+		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
+	}
+	projectId := c.Params("id")
+	if projectId == "" {
+		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
+	}
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	name := parsed.UserID + "-" + projectId
+	file, _, err := git.GetFile(env.GitUsername, name, "dev", path)
+	if file == nil {
+		return c.Status(http.StatusNotFound).JSON(errors.NotFound)
+	}
+	return c.Status(http.StatusOK).Send(file)
 }
