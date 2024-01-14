@@ -97,7 +97,9 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 
 	projects.Get("/", getProjects)
 	projects.Post("/", createProject)
+	projects.Get("/:id/file", getFile)
 	projects.Patch("/files", updateContents)
+	projects.Get("/:id/files", getContents)
 	projects.Get("/:id", getProject)
 	projects.Delete("/:id", deleteProject)
 }
