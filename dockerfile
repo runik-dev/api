@@ -1,6 +1,6 @@
 FROM golang:1.21.4-alpine
 
-RUN apk add --no-cache build-base dumb-init
+RUN apk add --no-cache build-base dumb-init nodejs
 
 COPY . /app
 
