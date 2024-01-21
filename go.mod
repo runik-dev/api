@@ -4,6 +4,7 @@ go 1.21.4
 
 require (
 	cloud.google.com/go/storage v1.35.1
+	code.gitea.io/sdk/gitea v0.17.0
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/bytedance/sonic v1.10.2
 	github.com/chai2010/webp v1.1.1
@@ -12,6 +13,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gofiber/fiber/v2 v2.50.0
 	github.com/koyachi/go-nude v0.0.1
+	github.com/pquerna/otp v1.4.0
 	golang.org/x/crypto v0.14.0
 	gorm.io/driver/postgres v1.5.4
 	gorm.io/gorm v1.25.5
@@ -22,8 +24,8 @@ require (
 	cloud.google.com/go/compute v1.23.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.3 // indirect
-	code.gitea.io/sdk/gitea v0.17.0 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.0 // indirect
