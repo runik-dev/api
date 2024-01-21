@@ -13,10 +13,170 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
+func create2fa(userId string) (string, string, error) {
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: "Infrared Digital", AccountName: userId})
+	if err != nil {
+		return "", "", err
+	}
+	return key.Secret(), key.URL(), nil
+}
+type SetUpBody struct {
+	Password string `json:"password" validate:"required,min=8,max=32"`
+}
+func setUp2FA(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+
+	var body SetUpBody
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(errors.MalformedBody(err))
+	}
+	errs := _validate.Validate(body)
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+		return err
+	}
+
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	
+	var user structs.User
+	err = db.Where(&structs.User{ID: parsed.UserID}).First(&user).Error
+	if err == gorm.ErrRecordNotFound {
+		return c.Status(http.StatusUnauthorized).JSON(errors.NotFound)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerSqlError)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(errors.UserCredentialsInvalid)
+	}
+	if err != nil {
+		return c.Status(500).JSON(errors.ServerHash)
+	}
+
+	secret, url, err := create2fa(parsed.UserID)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerTotpError)
+	}
+
+	err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Update("totp_secret", secret).Error
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerSqlError)
+	}
+	return c.Status(200).JSON(fiber.Map{"secret": secret, "url": url})
+}
+func verify2fa(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	code := c.Params("code")
+	if code == "" {
+		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+	var user structs.User
+	err = db.Model(&structs.User{}).Select("TotpSecret", "TotpVerified").Where(&structs.User{ID: parsed.UserID}).First(&user).Error
+	if err == gorm.ErrRecordNotFound {
+		return c.Status(http.StatusUnauthorized).JSON(errors.NotFound)
+	} else if err != nil {
+		return c.Status(500).JSON(errors.ServerSqlError)
+	}
+
+	valid := totp.Validate(code, user.TotpSecret)
+	if valid && user.TotpVerified {
+		return c.Status(http.StatusOK).JSON(fiber.Map{"valid": true})
+	} else if valid {
+		db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Update("totp_verified", true)
+		return c.Status(http.StatusOK).JSON(fiber.Map{"valid": true})
+	} else {
+		return c.Status(http.StatusOK).JSON(fiber.Map{"valid": false})
+	}
+}
+
+func remove2fa(c *fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	session, err := rdb.Get(ctx, "session:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+
+	var body SetUpBody
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(errors.MalformedBody(err))
+	}
+	errs := _validate.Validate(body)
+	if err, rtrn := handleValidateErrors(errs, c); rtrn {
+		return err
+	}
+
+	var parsed structs.Session
+	err = sonic.UnmarshalString(session, &parsed)
+	if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerParseError)
+	}
+
+	var user structs.User
+	err = db.Where(&structs.User{ID: parsed.UserID}).First(&user).Error
+	if err == gorm.ErrRecordNotFound {
+		return c.Status(http.StatusUnauthorized).JSON(errors.NotFound)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerSqlError)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(errors.UserCredentialsInvalid)
+	}
+	if err != nil {
+		return c.Status(500).JSON(errors.ServerHash)
+	}
+	err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Updates(&structs.User{TotpSecret: "", TotpVerified: false}).Error
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)
+	}
+	return c.Status(http.StatusNoContent).Send(nil)
+}
 func getMe(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization == "" {
@@ -41,9 +201,6 @@ func getMe(c *fiber.Ctx) error {
 		return c.Status(404).JSON(errors.NotFound)
 	} else if err != nil {
 		return c.Status(500).JSON(errors.ServerSqlError)
-	}
-	if err != nil {
-		return c.Status(500).JSON(errors.ServerStringifyError)
 	}
 
 	return c.Status(200).JSON(user)
