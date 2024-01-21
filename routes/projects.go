@@ -357,7 +357,7 @@ func getContents(c *fiber.Ctx) error {
 	}
 	sha := branch.Commit.ID
 	url := env.GitUrl + "/api/v1/repos/" + env.GitUsername + "/" + name + "/git/trees/" + sha + "?recursive=true&token=" + env.GitToken
-	req, err := http.Get(url)
+	req, _ := http.Get(url)
 	data, err := convertToFiles(req.Body)
 	if err != nil {
 		fmt.Println("err", err.Error())
@@ -423,7 +423,7 @@ func getFile(c *fiber.Ctx) error {
 		return c.Status(500).JSON(errors.ServerParseError)
 	}
 	name := parsed.UserID + "-" + projectId
-	file, _, err := git.GetFile(env.GitUsername, name, "dev", path)
+	file, _, _ := git.GetFile(env.GitUsername, name, "dev", path)
 	if file == nil {
 		return c.Status(http.StatusNotFound).JSON(errors.NotFound)
 	}
