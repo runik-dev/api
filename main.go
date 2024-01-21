@@ -83,7 +83,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
-		Prefork:     true,
+		Prefork:     false,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			return c.Status(fiber.StatusBadRequest).JSON(routes.GlobalErrorHandlerResp{
 				Success: false,
