@@ -27,6 +27,10 @@ type User struct {
 	Email     string `gorm:"uniqueIndex"`
 	Password  string `gorm:"notNull"`
 	Verified  bool   `gorm:"default:false"`
+	
+	TotpSecret string 
+	TotpVerified bool `gorm:"default:false"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
