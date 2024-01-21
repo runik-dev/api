@@ -67,16 +67,19 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to convert RPS to integer")
 	}
+
 	client, bucket := storage.Connect(&env)
 	defer client.Close()
 
 	db := database.Connect(&env)
 	rdb := database.RedisConnect(&env)
 	sender := email.NewEmailSender(env.SmtpHost, env.SmtpPort, env.SenderUsername, env.SenderPassword, env.SenderEmail)
+
 	git, err := git.Connect(&env)
 	if err != nil {
 		log.Fatal("Failed to connect to git", err.Error())
 	}
+
 	app := fiber.New(fiber.Config{
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
