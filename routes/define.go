@@ -79,6 +79,7 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 	users.Delete("/sessions", deleteSessions)
 	users.Get("/sessions", getSessions)
 	users.Delete("/sessions/:token", deleteSession)
+	users.Put("/sessions/:totp", confirm2faSignIn)
 
 	users.Get("/me", getMe)
 	users.Put("/me/email", putEmail)
@@ -92,6 +93,10 @@ func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, 
 
 	users.Post("/reset", postReset)
 	users.Put("/reset/:token", putReset)
+
+	users.Post("/totp", setUp2FA)
+	users.Put("/totp/:code", verify2fa)
+	users.Delete("/totp", remove2fa)
 
 	projects := v1.Group("/projects")
 
