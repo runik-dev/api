@@ -25,9 +25,11 @@ func create2fa(userId string) (string, string, error) {
 	}
 	return key.Secret(), key.URL(), nil
 }
+
 type SetUpBody struct {
 	Password string `json:"password" validate:"required,min=8,max=32"`
 }
+
 func setUp2FA(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization == "" {
@@ -56,7 +58,7 @@ func setUp2FA(c *fiber.Ctx) error {
 		fmt.Println(err.Error())
 		return c.Status(500).JSON(errors.ServerParseError)
 	}
-	
+
 	var user structs.User
 	err = db.Where(&structs.User{ID: parsed.UserID}).First(&user).Error
 	if err == gorm.ErrRecordNotFound {
@@ -171,12 +173,13 @@ func remove2fa(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(500).JSON(errors.ServerHash)
 	}
-	err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Updates(&structs.User{TotpSecret: "", TotpVerified: false}).Error
+	err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Updates(map[string]interface{}{"TotpSecret": "", "TotpVerified": false}).Error
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)
 	}
 	return c.Status(http.StatusNoContent).Send(nil)
 }
+
 func getMe(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization == "" {
