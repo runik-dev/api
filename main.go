@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"strconv"
@@ -21,8 +20,6 @@ import (
 	"runik-api/storage"
 	"runik-api/structs"
 )
-
-var ctx = context.Background()
 
 func checkEnv() structs.Environment {
 	var env structs.Environment
