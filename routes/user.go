@@ -262,8 +262,8 @@ func putEmail(c *fiber.Ctx) error {
 }
 
 type PutPassword struct {
-	OldPassword string `json:"oldPassword" validate:"required,min=8,max=32"`
-	NewPassword string `json:"newPassword" validate:"required,min=8,max=32"`
+	OldPassword string `json:"old_password" validate:"required,min=8,max=32"`
+	NewPassword string `json:"new_password" validate:"required,min=8,max=32"`
 }
 
 func putPassword(c *fiber.Ctx) error {
