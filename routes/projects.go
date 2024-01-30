@@ -77,7 +77,8 @@ func getProject(c *fiber.Ctx) error {
 }
 
 type CreateBody struct {
-	Name string `json:"name" validate:"required,min=4,max=64"`
+	Name     string `json:"name" validate:"required,min=4,max=64"`
+	Template string `json:"template" validate:"required,min=1"`
 }
 
 func createProject(c *fiber.Ctx) error {
@@ -107,9 +108,14 @@ func createProject(c *fiber.Ctx) error {
 	if err, rtrn := handleValidateErrors(errs, c); rtrn {
 		return err
 	}
+
+	if body.Template != "splitscript_javascript" && body.Template != "splitscript_typescript" {
+		return c.Status(400).JSON(errors.InvalidTemplate)
+	}
+
 	id := generator.Generate()
 	name := parsed.UserID + "-" + id.String()
-	_, _, err = git.CreateRepoFromTemplate(env.GitUsername, env.GitTemplate, gitea.CreateRepoFromTemplateOption{Owner: env.GitUsername, Name: name, Private: true, GitContent: true, Description: body.Name})
+	_, _, err = git.CreateRepoFromTemplate(env.GitUsername, "template_"+body.Template, gitea.CreateRepoFromTemplateOption{Owner: env.GitUsername, Name: name, Private: true, GitContent: true, Description: body.Name})
 	if err != nil {
 		fmt.Println(err.Error())
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerGitError)
@@ -366,14 +372,14 @@ func getContents(c *fiber.Ctx) error {
 }
 
 func readToString(reader io.ReadCloser) (string, error) {
-    defer reader.Close()
+	defer reader.Close()
 
-    data, err := io.ReadAll(reader)
-    if err != nil {
-        return "", err
-    }
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
 
-    return string(data), nil
+	return string(data), nil
 }
 func convertToFiles(reader io.ReadCloser) (interface{}, error) {
 	jsonString, err := readToString(reader)
@@ -381,7 +387,7 @@ func convertToFiles(reader io.ReadCloser) (interface{}, error) {
 		return nil, err
 	}
 	cmd := exec.Command("node", "./routes/convert.js", "--json", jsonString)
-	
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("Error executing command:", err)
