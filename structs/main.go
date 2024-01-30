@@ -20,7 +20,6 @@ type Environment struct {
 	GitToken         string
 	GitUrl           string
 	GitUsername      string
-	GitTemplate      string
 }
 type User struct {
 	ID       string `gorm:"type:bigint;primaryKey"`
