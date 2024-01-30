@@ -43,7 +43,6 @@ func checkEnv() structs.Environment {
 		{"GIT_TOKEN", &env.GitToken},
 		{"GIT_URL", &env.GitUrl},
 		{"GIT_USERNAME", &env.GitUsername},
-		{"GIT_TEMPLATE", &env.GitTemplate},
 	}
 
 	for _, v := range envVars {
