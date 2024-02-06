@@ -8,7 +8,7 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-RUN CGO_ENABLED=1 go build -o bin .
+RUN CGO_ENABLED=0 go build -o bin .
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--", "/app/bin"]
 
