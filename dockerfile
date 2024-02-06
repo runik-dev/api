@@ -10,6 +10,6 @@ COPY go.mod go.sum ./
 RUN go mod download
 RUN go build -o bin .
 
-ENTRYPOINT ["/usr/bin/dumb-init", "--", "/app/bin"]
+ENTRYPOINT CGO_ENABLED=1 ["/usr/bin/dumb-init", "--", "/app/bin"]
 
 EXPOSE 3000
