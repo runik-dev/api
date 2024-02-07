@@ -8,9 +8,7 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-ENV CGO_ENABLED=0
-ENV GOOS=linux
-ENV GOARCH=amd64
+ENV CGO_ENABLED=1
 RUN go build -o bin .
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--", "/app/bin"]
