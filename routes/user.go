@@ -170,9 +170,6 @@ func remove2fa(c *fiber.Ctx) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(errors.UserCredentialsInvalid)
 	}
-	if err != nil {
-		return c.Status(500).JSON(errors.ServerHash)
-	}
 	err = db.Model(&structs.User{}).Where(&structs.User{ID: parsed.UserID}).Updates(map[string]interface{}{"TotpSecret": "", "TotpVerified": false}).Error
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)

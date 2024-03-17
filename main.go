@@ -5,13 +5,14 @@ import (
 	"os"
 	"strconv"
 	"time"
-
+	
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
+	_ "github.com/joho/godotenv/autoload"
 
 	"runik-api/database"
 	"runik-api/email"
@@ -21,40 +22,6 @@ import (
 	"runik-api/structs"
 )
 
-func checkEnv() structs.Environment {
-	var env structs.Environment
-
-	envVars := []struct {
-		name  string
-		field *string
-	}{
-		{"CONNECTION_STRING", &env.ConnectionString},
-		{"GLOBAL_AUTH", &env.GlobalAuth},
-		{"SMTP_HOST", &env.SmtpHost},
-		{"SMTP_PORT", &env.SmtpPort},
-		{"SENDER_EMAIL", &env.SenderEmail},
-		{"SENDER_PASSWORD", &env.SenderPassword},
-		{"SMTP_USERNAME", &env.SenderUsername},
-		{"REDIS_ADDRESS", &env.RedisAddress},
-		{"REDIS_PASSWORD", &env.RedisPassword},
-		{"PORT", &env.Port},
-		{"RPS", &env.Rps},
-		{"STORAGE_BUCKET", &env.StorageBucket},
-		{"GIT_TOKEN", &env.GitToken},
-		{"GIT_URL", &env.GitUrl},
-		{"GIT_USERNAME", &env.GitUsername},
-	}
-
-	for _, v := range envVars {
-		value, exists := os.LookupEnv(v.name)
-		if !exists {
-			log.Fatal("Environment variable not found: ", v.name)
-		}
-		*v.field = value
-	}
-
-	return env
-}
 
 func main() {
 	env := checkEnv()
@@ -68,6 +35,7 @@ func main() {
 	defer client.Close()
 
 	db := database.Connect(&env)
+
 	rdb := database.RedisConnect(&env)
 	sender := email.NewEmailSender(env.SmtpHost, env.SmtpPort, env.SenderUsername, env.SenderPassword, env.SenderEmail)
 
@@ -103,4 +71,38 @@ func main() {
 	routes.DefineRoutes(app, db, rdb, &env, sender, bucket, git)
 
 	app.Listen(":" + env.Port)
+}
+func checkEnv() structs.Environment {
+	var env structs.Environment
+
+	envVars := []struct {
+		name  string
+		field *string
+	}{
+		{"CONNECTION_STRING", &env.ConnectionString},
+		{"GLOBAL_AUTH", &env.GlobalAuth},
+		{"SMTP_HOST", &env.SmtpHost},
+		{"SMTP_PORT", &env.SmtpPort},
+		{"SENDER_EMAIL", &env.SenderEmail},
+		{"SENDER_PASSWORD", &env.SenderPassword},
+		{"SMTP_USERNAME", &env.SenderUsername},
+		{"REDIS_ADDRESS", &env.RedisAddress},
+		{"REDIS_PASSWORD", &env.RedisPassword},
+		{"PORT", &env.Port},
+		{"RPS", &env.Rps},
+		{"STORAGE_BUCKET", &env.StorageBucket},
+		{"GIT_TOKEN", &env.GitToken},
+		{"GIT_URL", &env.GitUrl},
+		{"GIT_USERNAME", &env.GitUsername},
+	}
+
+	for _, v := range envVars {
+		value, exists := os.LookupEnv(v.name)
+		if !exists {
+			log.Fatal("Environment variable not found: ", v.name)
+		}
+		*v.field = value
+	}
+
+	return env
 }

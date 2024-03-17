@@ -57,7 +57,25 @@ func getProjects(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(http.StatusOK).JSON(projects)
+	return c.JSON(projects)
+}
+func getDeployProjects(c * fiber.Ctx) error {
+	authorization := c.Get("Authorization")
+	if authorization == "" {
+		return c.Status(401).JSON(errors.AuthorizationMissing)
+	}
+	userId, err := rdb.Get(ctx, "dt:"+authorization).Result()
+	if err == redis.Nil {
+		return c.Status(401).JSON(errors.AuthorizationInvalid)
+	} else if err != nil {
+		fmt.Println(err.Error())
+		return c.Status(500).JSON(errors.ServerRedisError)
+	}
+
+	var projects []structs.ApiProject
+	db.Model(&structs.Project{}).Where(&structs.Project{UserID: userId}).Find(&projects)
+
+	return c.JSON(projects)
 }
 func getProject(c *fiber.Ctx) error {
 	projectId := c.Params("id")
@@ -73,7 +91,7 @@ func getProject(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerSqlError)
 	}
-	return c.Status(http.StatusOK).JSON(project)
+	return c.JSON(project)
 }
 
 type CreateBody struct {
@@ -327,7 +345,7 @@ func updateContents(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(errors.ServerGitError)
 	}
 
-	return c.Status(http.StatusOK).JSON(result)
+	return c.JSON(result)
 }
 func getContents(c *fiber.Ctx) error {
 	projectId := c.Params("id")
@@ -433,5 +451,5 @@ func getFile(c *fiber.Ctx) error {
 	if file == nil {
 		return c.Status(http.StatusNotFound).JSON(errors.NotFound)
 	}
-	return c.Status(http.StatusOK).Send(file)
+	return c.Send(file)
 }
