@@ -1,6 +1,6 @@
 # Runik API
 
-`v0.2.1`
+`v0.4.0`
 User management API built with PostgreSQL, Redis, Fiber, and GORM
 
 ## Authorization
@@ -8,7 +8,7 @@ User management API built with PostgreSQL, Redis, Fiber, and GORM
 ### Global Auth
 
 This is a master token that can be sent for some endpoints
-It can be set by the `GLOBAL_AUTH` environment variable
+It can be set by the `API_AUTHENTICATION` environment variable
 
 ### Session Auth
 
