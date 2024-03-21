@@ -22,8 +22,6 @@ type Environment struct {
 	Port              string
 	RequestsPerSecond string
 
-	StorageBucket string
-
 	GitToken    string
 	GitUrl      string
 	GitUsername string
