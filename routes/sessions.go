@@ -3,11 +3,12 @@ package routes
 import (
 	"fmt"
 	"net/http"
-	"runik-api/errors"
-	"runik-api/structs"
-	"runik-api/utils"
 	"sync"
 	"time"
+
+	"api/errors"
+	"api/structs"
+	"api/utils"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-redis/redis/v8"
@@ -39,7 +40,7 @@ func getIp(body PostSessions, c *fiber.Ctx) string {
 }
 func postSessions(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
-	if authorization != env.GlobalAuth {
+	if authorization != env.ApiAuthentication {
 		return c.Status(http.StatusUnauthorized).JSON(errors.AuthorizationInvalid)
 	}
 
@@ -63,8 +64,8 @@ func postSessions(c *fiber.Ctx) error {
 	}
 	if user.TotpVerified {
 		id := generator.Generate()
-		rdb.Set(ctx, "totp:"+id.String(), user.ID, time.Minute * 15)
-		return c.Status(http.StatusOK).JSON(fiber.Map{"action_name": "totp", "totp_id":id.String()})
+		rdb.Set(ctx, "totp:"+id.String(), user.ID, time.Minute*15)
+		return c.Status(http.StatusOK).JSON(fiber.Map{"action_name": "totp", "totp_id": id.String()})
 	}
 	ip := getIp(body, c)
 	expiration := getExpiration(body.Expire)
@@ -82,7 +83,7 @@ func postSessions(c *fiber.Ctx) error {
 }
 func confirm2faSignIn(c *fiber.Ctx) error {
 	totpId := c.Params("totp")
-	if totpId== "" {
+	if totpId == "" {
 		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
 	}
 
@@ -93,7 +94,7 @@ func confirm2faSignIn(c *fiber.Ctx) error {
 	}
 
 	authorization := c.Get("Authorization")
-	if authorization != env.GlobalAuth {
+	if authorization != env.ApiAuthentication {
 		return c.Status(http.StatusUnauthorized).JSON(errors.AuthorizationInvalid)
 	}
 
@@ -101,7 +102,7 @@ func confirm2faSignIn(c *fiber.Ctx) error {
 	if code == "" {
 		return c.Status(http.StatusBadRequest).JSON(errors.MissingParameter)
 	}
-	
+
 	val, err := rdb.Get(ctx, "totp:"+totpId).Result()
 	if err == redis.Nil {
 		return c.Status(http.StatusUnauthorized).JSON(errors.NotFound)

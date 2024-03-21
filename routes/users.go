@@ -2,10 +2,11 @@ package routes
 
 import (
 	"fmt"
-	"runik-api/errors"
-	"runik-api/structs"
-	"runik-api/utils"
 	"time"
+
+	"api/errors"
+	"api/structs"
+	"api/utils"
 
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v2"
@@ -21,7 +22,7 @@ type PostBody struct {
 
 func postUsers(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
-	if authorization != env.GlobalAuth {
+	if authorization != env.ApiAuthentication {
 		return c.Status(401).JSON(errors.AuthorizationInvalid)
 	}
 	var body PostBody

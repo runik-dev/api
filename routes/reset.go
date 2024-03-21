@@ -2,10 +2,11 @@ package routes
 
 import (
 	"net/http"
-	"runik-api/errors"
-	"runik-api/structs"
-	"runik-api/utils"
 	"time"
+
+	"api/errors"
+	"api/structs"
+	"api/utils"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
@@ -27,7 +28,7 @@ type PostResetBody struct {
 
 func postReset(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
-	if authorization != env.GlobalAuth {
+	if authorization != env.ApiAuthentication {
 		return c.Status(401).JSON(errors.AuthorizationInvalid)
 	}
 	var body PostResetBody

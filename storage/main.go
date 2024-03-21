@@ -3,65 +3,38 @@ package storage
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"image"
 	"log"
-	"strings"
 
-	"runik-api/structs"
+	"api/structs"
 
-	"cloud.google.com/go/storage"
-	"github.com/chai2010/webp"
-	"github.com/disintegration/imaging"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 var (
 	ctx    = context.Background()
-	bucket *storage.BucketHandle
+	client *minio.Client
+	env    *structs.Environment
 )
 
-func Connect(env *structs.Environment) (*storage.Client, *storage.BucketHandle) {
-	client, err := storage.NewClient(ctx)
+func Connect(_env *structs.Environment) *minio.Client {
+	env = _env
+	var err error
+	client, err = minio.New(env.MinioEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(env.MinioAccessKeyId, env.MinioAccessKey, ""),
+		Secure: true,
+	})
 	if err != nil {
 		log.Fatalf("Failed to create storage client: %v", err)
 	}
-	bucket = client.Bucket(env.StorageBucket)
-	return client, bucket
+
+	return client
 }
 
-func Resize(b64 string, w int, h int) (*image.NRGBA, error) {
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return nil, err
-	}
-
-	img, _, err := image.Decode(strings.NewReader(string(data)))
-	if err != nil {
-		return nil, err
-	}
-
-	resized := imaging.Resize(img, w, h, imaging.Lanczos)
-	return resized, nil
-}
-func ToWebp(img *image.NRGBA) (*bytes.Buffer, error) {
-	var buffer bytes.Buffer
-
-	if err := webp.Encode(&buffer, img, &webp.Options{Lossless: true}); err != nil {
-		return nil, err
-	}
-	return &buffer, nil
-}
 func Upload(name string, buffer bytes.Buffer) error {
-	writer := bucket.Object("avatars/" + name + ".webp").NewWriter(ctx)
-	defer writer.Close()
-
-	_, err := writer.Write(buffer.Bytes())
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := client.PutObject(ctx, env.MinioAvatarBucket, name+".webp", &buffer, int64(buffer.Len()), minio.PutObjectOptions{ContentType: "image/webp"})
+	return err
 }
 func Remove(name string) error {
-	err := bucket.Object("avatars/" + name + ".webp").Delete(ctx)
-	return err
+	return client.RemoveObject(ctx, env.MinioAvatarBucket, name+".webp", minio.RemoveObjectOptions{})
 }

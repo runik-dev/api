@@ -3,12 +3,13 @@ package routes
 import (
 	"fmt"
 	"net/http"
-	"runik-api/errors"
-	"runik-api/nsfw"
-	"runik-api/storage"
-	"runik-api/structs"
-	"runik-api/utils"
 	"time"
+
+	"api/errors"
+	"api/nsfw"
+	"api/storage"
+	"api/structs"
+	"api/utils"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-redis/redis/v8"

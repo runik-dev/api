@@ -2,7 +2,8 @@ package database
 
 import (
 	"log"
-	"runik-api/structs"
+
+	"api/structs"
 
 	"github.com/go-redis/redis/v8"
 	"gorm.io/driver/postgres"
@@ -10,7 +11,7 @@ import (
 )
 
 func Connect(env *structs.Environment) *gorm.DB {
-	db, err := gorm.Open(postgres.Open(env.ConnectionString), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(env.PostgresConnection), &gorm.Config{})
 	if err != nil {
 		log.Fatal("failed to connect to db", err)
 	}

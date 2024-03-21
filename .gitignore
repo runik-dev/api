@@ -1,4 +1,4 @@
 .env
 .dccache
 *.json
-runik-api
+api

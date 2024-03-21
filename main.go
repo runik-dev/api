@@ -5,7 +5,14 @@ import (
 	"os"
 	"strconv"
 	"time"
-	
+
+	"api/database"
+	"api/email"
+	"api/git"
+	"api/routes"
+	"api/storage"
+	"api/structs"
+
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
@@ -13,31 +20,22 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
 	_ "github.com/joho/godotenv/autoload"
-
-	"runik-api/database"
-	"runik-api/email"
-	"runik-api/git"
-	"runik-api/routes"
-	"runik-api/storage"
-	"runik-api/structs"
 )
-
 
 func main() {
 	env := checkEnv()
 
-	rpsInt, err := strconv.Atoi(env.Rps)
+	rpsInt, err := strconv.Atoi(env.RequestsPerSecond)
 	if err != nil {
 		log.Fatal("Failed to convert RPS to integer")
 	}
 
-	client, bucket := storage.Connect(&env)
-	defer client.Close()
+	storage.Connect(&env)
 
 	db := database.Connect(&env)
 
 	rdb := database.RedisConnect(&env)
-	sender := email.NewEmailSender(env.SmtpHost, env.SmtpPort, env.SenderUsername, env.SenderPassword, env.SenderEmail)
+	sender := email.NewEmailSender(env.SmtpHost, env.SmtpPort, env.SmtpUsername, env.SenderPassword, env.SenderEmail)
 
 	git, err := git.Connect(&env)
 	if err != nil {
@@ -68,7 +66,7 @@ func main() {
 	}))
 	app.Get("/monitor", monitor.New())
 	// router.Use(middleware.LeakBucket(limiter))
-	routes.DefineRoutes(app, db, rdb, &env, sender, bucket, git)
+	routes.DefineRoutes(app, db, rdb, &env, sender, git)
 
 	app.Listen(":" + env.Port)
 }
@@ -79,21 +77,31 @@ func checkEnv() structs.Environment {
 		name  string
 		field *string
 	}{
-		{"CONNECTION_STRING", &env.ConnectionString},
-		{"GLOBAL_AUTH", &env.GlobalAuth},
+		{"POSTGRES_CONNECTION", &env.PostgresConnection},
+		{"API_AUTHENTICATION", &env.ApiAuthentication},
+
 		{"SMTP_HOST", &env.SmtpHost},
 		{"SMTP_PORT", &env.SmtpPort},
+		{"SMTP_USERNAME", &env.SmtpUsername},
 		{"SENDER_EMAIL", &env.SenderEmail},
 		{"SENDER_PASSWORD", &env.SenderPassword},
-		{"SMTP_USERNAME", &env.SenderUsername},
+
 		{"REDIS_ADDRESS", &env.RedisAddress},
 		{"REDIS_PASSWORD", &env.RedisPassword},
+
 		{"PORT", &env.Port},
-		{"RPS", &env.Rps},
+		{"REQUESTS_PER_SECOND", &env.RequestsPerSecond},
+
 		{"STORAGE_BUCKET", &env.StorageBucket},
+
 		{"GIT_TOKEN", &env.GitToken},
 		{"GIT_URL", &env.GitUrl},
 		{"GIT_USERNAME", &env.GitUsername},
+
+		{"MINIO_ENDPOINT", &env.MinioEndpoint},
+		{"MINIO_ACCESS_KEY_ID", &env.MinioAccessKeyId},
+		{"MINIO_ACCESS_KEY", &env.MinioAccessKey},
+		{"MINIO_AVATAR_BUCKET", &env.MinioAvatarBucket},
 	}
 
 	for _, v := range envVars {

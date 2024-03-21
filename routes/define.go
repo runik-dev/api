@@ -6,18 +6,15 @@ import (
 	"log"
 	"net/http"
 
-	"runik-api/email"
-	"runik-api/structs"
+	"api/email"
+	"api/structs"
 
 	"code.gitea.io/sdk/gitea"
 	"github.com/bwmarrin/snowflake"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
-
 	"gorm.io/gorm"
-
-	googleStorage "cloud.google.com/go/storage"
 )
 
 var (
@@ -51,7 +48,7 @@ type (
 	}
 )
 
-func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, environment *structs.Environment, emailSender *email.EmailSender, bucket *googleStorage.BucketHandle, gitClient *gitea.Client) {
+func DefineRoutes(r *fiber.App, database *gorm.DB, redisDatabase *redis.Client, environment *structs.Environment, emailSender *email.EmailSender, gitClient *gitea.Client) {
 	db = database
 	rdb = redisDatabase
 	env = environment

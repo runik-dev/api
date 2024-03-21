@@ -17,8 +17,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"runik-api/errors"
-	"runik-api/structs"
+	"api/errors"
+	"api/structs"
 )
 
 func getProjects(c *fiber.Ctx) error {
@@ -59,7 +59,7 @@ func getProjects(c *fiber.Ctx) error {
 
 	return c.JSON(projects)
 }
-func getDeployProjects(c * fiber.Ctx) error {
+func getDeployProjects(c *fiber.Ctx) error {
 	authorization := c.Get("Authorization")
 	if authorization == "" {
 		return c.Status(401).JSON(errors.AuthorizationMissing)

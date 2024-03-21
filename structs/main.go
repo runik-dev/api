@@ -5,21 +5,33 @@ import (
 )
 
 type Environment struct {
-	ConnectionString string
-	GlobalAuth       string
-	SmtpHost         string
-	SmtpPort         string
-	SenderEmail      string
-	SenderPassword   string
-	SenderUsername   string
-	RedisAddress     string
-	RedisPassword    string
-	Port             string
-	Rps              string
-	StorageBucket    string
-	GitToken         string
-	GitUrl           string
-	GitUsername      string
+	PostgresConnection string
+
+	ApiAuthentication string
+
+	SmtpHost     string
+	SmtpPort     string
+	SmtpUsername string
+
+	SenderEmail    string
+	SenderPassword string
+
+	RedisAddress  string
+	RedisPassword string
+
+	Port              string
+	RequestsPerSecond string
+
+	StorageBucket string
+
+	GitToken    string
+	GitUrl      string
+	GitUsername string
+
+	MinioEndpoint     string
+	MinioAccessKeyId  string
+	MinioAccessKey    string
+	MinioAvatarBucket string
 }
 type User struct {
 	ID       string `gorm:"type:bigint;primaryKey"`

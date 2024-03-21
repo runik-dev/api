@@ -1,7 +1,7 @@
 package git
 
 import (
-	"runik-api/structs"
+	"api/structs"
 
 	"code.gitea.io/sdk/gitea"
 )
