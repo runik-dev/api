@@ -14,21 +14,25 @@ require (
 	github.com/koyachi/go-nude v0.0.1
 	github.com/pquerna/otp v1.4.0
 	golang.org/x/crypto v0.21.0
-	gorm.io/driver/postgres v1.5.7
 	gorm.io/gorm v1.25.8
 )
 
 require (
+	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	github.com/ekristen/gorm-libsql v0.0.0-20231128051208-896355c83c28 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/libsql/libsql-client-go v0.0.0-20231026052543-fce76c0f39a7 // indirect
+	github.com/libsql/sqlite-antlr4-parser v0.0.0-20230802215326-5cb5bb604475 // indirect
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/rs/xid v1.5.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	nhooyr.io/websocket v1.8.7 // indirect
 )
 
 require (
@@ -45,9 +49,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
-	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20231201235250-de7065d80cb9 // indirect
-	github.com/jackc/pgx/v5 v5.5.5 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/joho/godotenv v1.5.1
@@ -61,6 +62,7 @@ require (
 	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/tinylib/msgp v1.1.9 // indirect
+	github.com/tursodatabase/libsql-client-go v0.0.0-20240324203521-43ee80731cd2
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.52.0 // indirect
@@ -70,4 +72,5 @@ require (
 	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
+	gorm.io/driver/sqlite v1.5.5
 )

@@ -37,7 +37,7 @@ func main() {
 
 	git, err := git.Connect(&env)
 	if err != nil {
-		log.Fatal("Failed to connect to git", err.Error())
+		log.Fatal("Failed to connect to git ", err.Error())
 	}
 
 	app := fiber.New(fiber.Config{

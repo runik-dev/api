@@ -7,5 +7,5 @@ import (
 )
 
 func Connect(env *structs.Environment) (*gitea.Client, error) {
-	return gitea.NewClient(env.GitUrl, gitea.SetToken(env.GitToken))
+	return gitea.NewClient(env.GitUrl, gitea.SetToken(env.GitToken), gitea.SetGiteaVersion("1.19.9"))
 }

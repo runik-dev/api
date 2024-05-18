@@ -6,12 +6,13 @@ import (
 	"api/structs"
 
 	"github.com/go-redis/redis/v8"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+  	"github.com/ekristen/gorm-libsql"
 )
 
 func Connect(env *structs.Environment) *gorm.DB {
-	db, err := gorm.Open(postgres.Open(env.PostgresConnection), &gorm.Config{})
+	url := env.TursoUrl + "?authToken=" + env.TursoToken
+	db, err := gorm.Open(libsql.Open(url), &gorm.Config{})
 	if err != nil {
 		log.Fatal("failed to connect to db", err)
 	}

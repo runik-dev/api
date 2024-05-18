@@ -5,7 +5,8 @@ import (
 )
 
 type Environment struct {
-	PostgresConnection string
+	TursoUrl   string
+	TursoToken string
 
 	ApiAuthentication string
 

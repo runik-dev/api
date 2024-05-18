@@ -14,7 +14,9 @@ func checkEnv() structs.Environment {
 		name  string
 		field *string
 	}{
-		{"POSTGRES_CONNECTION", &env.PostgresConnection},
+		{"TURSO_URL", &env.TursoUrl},
+		{"TURSO_TOKEN", &env.TursoToken},
+
 		{"API_AUTHENTICATION", &env.ApiAuthentication},
 
 		{"SMTP_HOST", &env.SmtpHost},
